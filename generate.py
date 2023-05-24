@@ -124,7 +124,6 @@ def generate_conditionally(text, cell_size=400, num_clusters=20, K=10, random_st
         v2 = (log_sigma_2).exp().data[0][0][sample_index].item()**2
         c = (rho.data[0][0][sample_index]*log_sigma_1.exp().data[0][0][sample_index].item()\
             *log_sigma_2.exp().data[0][0][sample_index].item()).cpu()
-        print(c)
         cov = np.array([[v1,c],[c,v2]])
         sample_point = np.random.multivariate_normal(mu, cov)
         
