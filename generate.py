@@ -148,7 +148,7 @@ def generate_conditionally(text, cell_size=400, num_clusters=20, K=10, random_st
     phis = torch.stack(phis).data.cpu().numpy().T
          
     plot_stroke(np.array(record))
-    attention_plot(phis)
+    # attention_plot(phis)
 
 
 def attention_plot(phis):
