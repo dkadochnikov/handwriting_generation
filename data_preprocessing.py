@@ -1,8 +1,5 @@
 # quick and dirty data preparation script
-
-import numpy as np
 import torch
-
 import numpy as np
 # save np.load
 np_load_old = np.load
@@ -19,7 +16,6 @@ with open('data/sentences.txt') as f:
 np.load = np_load_old
 
 
-    
 train_strokes = []
 train_texts = []
 validation_strokes = []
@@ -106,5 +102,3 @@ np.save('data/train_text_masks', train_text_masks)
 np.save('data/validation_text_masks', validation_text_masks)
 np.save('data/train_text_lens', train_text_lens)
 np.save('data/validation_text_lens', validation_text_lens)
-
-

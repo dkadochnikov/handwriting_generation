@@ -1,9 +1,12 @@
 import numpy as np
+import os
 import torch
 from torch.autograd import Variable
 from utilz import plot_stroke
 from model import LSTMRandWriter, LSTMSynthesis
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
+import pickle
+
 
 # find gpu 
 cuda = torch.cuda.is_available()
@@ -61,7 +64,7 @@ def generate_unconditionally(cell_size=400, num_clusters=20, steps=800, random_s
     
 
 def generate_conditionally(text, cell_size=400, num_clusters=20, K=10, random_state=700, \
-                            bias=1., bias2=1., state_dict_file='trained_models/conditional_epoch_60.pt'):
+                            bias=10., bias2=1., state_dict_file='trained_models/conditional_epoch_60.pt'):
     
     char_to_code = torch.load('char_to_code.pt')
     np.random.seed(random_state)
@@ -69,6 +72,7 @@ def generate_conditionally(text, cell_size=400, num_clusters=20, K=10, random_st
     
     model = LSTMSynthesis(len(text), len(char_to_code)+1, cell_size, num_clusters, K)
     model.load_state_dict(torch.load(state_dict_file)['model'])
+
     
     onehots = np.zeros((len(text), len(char_to_code)+1))
     for _ in range(len(text)):
@@ -102,7 +106,22 @@ def generate_conditionally(text, cell_size=400, num_clusters=20, K=10, random_st
     onehots = Variable(onehots, requires_grad = False)
     w_old = onehots.narrow(0,0,1)  # attention on the first input text char
     text_len = Variable(text_len)
-    
+
+    with open(os.path.join('data', 'styles.pkl'), 'rb') as file:
+        styles = pickle.load(file)
+    style = [styles[0][6], styles[1][6]]
+    if style is not None:
+        # Priming consist of joining to a real pen-position and character sequences the synthetic sequence to generate
+        #   and set the synthetic pen-position to a null vector (the positions are sampled from the MDN)
+        style_coords, style_text = style
+        prime_len = len(style_coords)
+        style_len = len(style_text)
+        prime_coords = list(style_coords)
+        coord = prime_coords[0]  # Set the first pen stroke as the first element to process
+        #text = np.r_[style_text, text]  # concatenate on 1 axis the prime text + synthesis character sequence
+        #sequence_prime = np.eye(len(text), dtype=np.float32)[style_text]
+        #sequence_prime = np.expand_dims(np.concatenate([sequence_prime, np.zeros((1, len(text)))]), axis=0)
+
     record = [np.zeros(3)]
     phis = []
     stop = False
@@ -110,25 +129,29 @@ def generate_conditionally(text, cell_size=400, num_clusters=20, K=10, random_st
     while not stop:    
         outputs = model(x, onehots, text_len, w_old, kappa_old, prev, prev2, bias)
         end, weights, mu_1, mu_2, log_sigma_1, log_sigma_2, rho, w_old, kappa_old, prev, prev2, old_phi = outputs
-        
-        #bernoulli sample
-        prob_end = end.data[0][0][0]
-        sample_end = np.random.binomial(1,prob_end.cpu())
+        is_priming = count < prime_len
 
-        #mog sample
-        sample_index = np.random.choice(range(20),p = weights.data[0][0].cpu().numpy())
-        mu = np.array([mu_1.data[0][0][sample_index].item(), mu_2.data[0][0][sample_index].item()])
-        log_sigma_1 = log_sigma_1 - bias2
-        log_sigma_2 = log_sigma_2 - bias2
-        v1 = (log_sigma_1).exp().data[0][0][sample_index].item()**2
-        v2 = (log_sigma_2).exp().data[0][0][sample_index].item()**2
-        c = (rho.data[0][0][sample_index]*log_sigma_1.exp().data[0][0][sample_index].item()\
-            *log_sigma_2.exp().data[0][0][sample_index].item()).cpu()
-        cov = np.array([[v1,c],[c,v2]])
-        sample_point = np.random.multivariate_normal(mu, cov)
-        
-        out = np.insert(sample_point,0,sample_end)
-        record.append(out)
+        if not is_priming:
+            #bernoulli sample
+            prob_end = end.data[0][0][0]
+            sample_end = np.random.binomial(1,prob_end.cpu())
+
+            #mog sample
+            sample_index = np.random.choice(range(20),p = weights.data[0][0].cpu().numpy())
+            mu = np.array([mu_1.data[0][0][sample_index].item(), mu_2.data[0][0][sample_index].item()])
+            log_sigma_1 = log_sigma_1 - bias2
+            log_sigma_2 = log_sigma_2 - bias2
+            v1 = (log_sigma_1).exp().data[0][0][sample_index].item()**2
+            v2 = (log_sigma_2).exp().data[0][0][sample_index].item()**2
+            c = (rho.data[0][0][sample_index]*log_sigma_1.exp().data[0][0][sample_index].item()\
+                *log_sigma_2.exp().data[0][0][sample_index].item()).cpu()
+            cov = np.array([[v1,c],[c,v2]])
+            sample_point = np.random.multivariate_normal(mu, cov)
+
+            out = np.insert(sample_point,0,sample_end)
+            record.append(out)
+        else:
+            out = prime_coords[count]
         x = torch.from_numpy(out).type(torch.FloatTensor)
         if cuda:
             x = x.cuda()
