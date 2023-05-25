@@ -22,7 +22,7 @@ cuda = torch.cuda.is_available()
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task', type=str, default='rand_write',
+    parser.add_argument('--task', type=str, default='synthesis',
                         help='"rand_write" or "synthesis"')
     parser.add_argument('--cell_size', type=int, default=400,
                         help='size of LSTM hidden state')

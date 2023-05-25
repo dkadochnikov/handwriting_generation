@@ -1,7 +1,9 @@
 import torch
 import os
-import numpy
-from matplotlib import pyplot
+from PIL import Image
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 def decay_learning_rate(optimizer, decay_rate):
     # learning rate annealing
@@ -28,38 +30,75 @@ def save_checkpoint(epoch, model, validation_loss, optimizer, directory, \
         torch.save(checkpoint, os.path.join(directory, filename))
 
 
-def plot_stroke(stroke, save_name=None):
-    # Plot a single example.
-    f, ax = pyplot.subplots()
+def plot_stroke(strokes, save_name=0):
 
-    x = numpy.cumsum(stroke[:, 1])
-    y = numpy.cumsum(stroke[:, 2])
+    n = len(strokes)
+    f = plt.figure(figsize=(17 * n, 5))
+    width_ratios = []
 
-    size_x = x.max() - x.min() + 1.
-    size_y = y.max() - y.min() + 1.
+    for stroke in strokes:
+        x = np.cumsum(stroke[:, 1])
 
-    f.set_size_inches(5. * size_x / size_y, 5.)
+        size_x = x.max() - x.min() + 1.
 
-    cuts = numpy.where(stroke[:, 0] == 1)[0]
-    start = 0
+        width_ratios.append(size_x)
 
-    for cut_value in cuts:
-        ax.plot(x[start:cut_value], y[start:cut_value],
-                'k-', linewidth=3)
-        start = cut_value + 1
-    ax.axis('equal')
-    ax.axes.get_xaxis().set_visible(False)
-    ax.axes.get_yaxis().set_visible(False)
+    gs = gridspec.GridSpec(1, n, width_ratios=width_ratios, wspace=0.7)
 
-    if save_name is None:
-        pyplot.show()
-    else:
-        try:
-            pyplot.savefig(
-                save_name,
-                bbox_inches='tight',
-                pad_inches=0.5)
-        except Exception:
-            print ("Error building image!: " + save_name)
+    for i, stroke in enumerate(strokes):
+        ax = plt.subplot(gs[i])
+        x = np.cumsum(stroke[:, 1])
+        y = np.cumsum(stroke[:, 2])
 
-    pyplot.close()
+        cuts = np.where(stroke[:, 0] == 1)[0]
+        start = 0
+
+        for cut_value in cuts:
+            ax.plot(x[start:cut_value], y[start:cut_value],
+                    'k-', linewidth=15)
+            start = cut_value + 1
+        ax.axis('off')
+        ax.axes.get_xaxis().set_visible(False)
+        ax.axes.get_yaxis().set_visible(False)
+
+    save_name = "plots/" + str(save_name) + ".png"
+
+    try:
+        plt.savefig(
+            save_name,
+            bbox_inches='tight',
+            pad_inches=0.5)
+    except Exception:
+        print("Error building image!: " + save_name)
+
+    plt.show()
+    plt.close()
+
+
+def plot_concat():
+    os.chdir("plots")
+    image_files = os.listdir('.')
+    image_files.sort(key=lambda f: int(f.split('.')[0]))
+
+    images = [Image.open(img) for img in image_files]
+
+    max_width = max(img.size[0] for img in images)
+
+    images_padded = []
+    for img in images:
+        width, height = img.size
+        new_img = Image.new('RGBA', (max_width, height), (255, 255, 255, 255))  # Создаем новое белое изображение
+        new_img.paste(img, (0, 0))  # Вставляем исходное изображение в верхний левый угол
+        images_padded.append(new_img)
+
+    total_height = sum(img.size[1] for img in images_padded)
+    combined = Image.new('RGBA', (max_width, total_height))  # Создаем новое изображение
+    y_offset = 0
+    for img in images_padded:
+        combined.paste(img, (0, y_offset))
+        y_offset += img.size[1]
+
+    os.chdir("..")
+    combined.save('combined.png')
+
+    Image.open('combined.png').show()
